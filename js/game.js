@@ -1,61 +1,47 @@
 /* ═══════════════════════════════════════
-   BRUTAL — Main Game Loop
+   ULTRAPIXEL — Main Game
    ═══════════════════════════════════════ */
 
 const Game = {
-  state:  'title', // title, playing, gameover, levelcomplete
-  player: null,
-  score:  0,
-  camX:   0, camY: 0,
+  state:    'title',
+  player:   null,
+  score:    0,
+  camX:     0, camY: 0,
   lastTime: 0,
-  animFrame: null,
+  levelTimer: 0,
 
   init() {
     Renderer.init();
     Audio.init();
     Input.init();
     MobileInput.init();
-
     this.player = Player;
 
-    // Screen buttons
-    document.getElementById('btn-start')?.addEventListener('click', () => this.startGame());
-    document.getElementById('btn-how')?.addEventListener('click', () => {
-      document.getElementById('screen-title').classList.add('hidden');
-      document.getElementById('screen-howto').classList.remove('hidden');
-    });
-    document.getElementById('btn-howto-back')?.addEventListener('click', () => {
-      document.getElementById('screen-howto').classList.add('hidden');
-      document.getElementById('screen-title').classList.remove('hidden');
-    });
-    document.getElementById('btn-retry')?.addEventListener('click', () => {
-      document.getElementById('screen-gameover').classList.add('hidden');
-      this.startLevel(Levels.index);
-    });
-    document.getElementById('btn-go-menu')?.addEventListener('click', () => {
-      document.getElementById('screen-gameover').classList.add('hidden');
-      document.getElementById('screen-title').classList.remove('hidden');
-      this.state = 'title';
-    });
-    document.getElementById('btn-next')?.addEventListener('click', () => {
-      document.getElementById('screen-levelcomplete').classList.add('hidden');
+    document.getElementById('btn-start')?.addEventListener('click',    () => this.startGame());
+    document.getElementById('btn-how')?.addEventListener('click',      () => { this._screen('howto'); });
+    document.getElementById('btn-howto-back')?.addEventListener('click',() => { this._screen('title'); });
+    document.getElementById('btn-retry')?.addEventListener('click',    () => { this._screen(null); this.startLevel(Levels.index); });
+    document.getElementById('btn-go-menu')?.addEventListener('click',  () => { this._screen('title'); this.state = 'title'; HUD.hide(); });
+    document.getElementById('btn-next')?.addEventListener('click',     () => {
+      this._screen(null);
       const next = Levels.next();
-      if (next) {
-        this.startLevel(Levels.index);
-      } else {
-        // Game complete — go to title
-        document.getElementById('screen-title').classList.remove('hidden');
-        this.state = 'title';
-      }
+      if (next) this.startLevel(Levels.index);
+      else { this._screen('title'); this.state = 'title'; HUD.hide(); }
     });
 
-    this.loop(0);
+    requestAnimationFrame(ts => this._loop(ts));
+  },
+
+  _screen(name) {
+    ['title','howto','gameover','levelcomplete'].forEach(s => {
+      document.getElementById('screen-'+s)?.classList.toggle('hidden', s !== name);
+    });
   },
 
   startGame() {
-    document.getElementById('screen-title').classList.add('hidden');
-    StyleMeter.reset();
+    this._screen(null);
     this.score = 0;
+    StyleMeter.reset();
     this.startLevel(0);
   },
 
@@ -66,92 +52,90 @@ const Game = {
     Weapons.init();
     Enemies.clear();
     Weapons.clear();
+    this.levelTimer = 0;
 
-    // Spawn player
     Player.init(lvl.playerStart.x, lvl.playerStart.y);
 
-    // Spawn enemies
     lvl.spawns.forEach(s => Enemies.spawn(s.type, s.x, s.y));
 
-    // Camera
     Renderer.camX = Player.x - Renderer.W * 0.4;
     Renderer.camY = Player.y - Renderer.H * 0.5;
 
     this.state = 'playing';
+    HUD.init();
+    HUD.updateBoss(null);
+
+    // Show boss HP if boss level
+    if (lvl.isBossLevel) {
+      const boss = Enemies.list.find(e => e.isBoss);
+      if (boss) HUD.updateBoss(boss.hp, 'BOSS');
+    }
   },
 
-  addScore(amount) {
-    this.score += amount;
-  },
+  addScore(amount) { this.score += amount; },
 
-  shake(amount) {
-    Renderer.shake(amount);
-  },
+  shake(amount) { Renderer.shake(amount); },
 
   get camX() { return Renderer.getCamX(); },
   get camY() { return Renderer.getCamY(); },
 
   onPlayerDeath() {
-    this.state = 'gameover';
-    Game.shake(12);
-    Particles.explode(Player.x + Player.w/2, Player.y + Player.h/2, 2);
-    Particles.blood(Player.x + Player.w/2, Player.y + Player.h/2, 0, 0, 30);
+    this.state = 'dead';
+    this.shake(14);
+    Particles.explode(Player.x + Player.w/2, Player.y + Player.h/2, 2.5);
+    Particles.blood(Player.x + Player.w/2, Player.y + Player.h/2, 0, 0, 40);
+    HUD.hide();
 
     setTimeout(() => {
       const stats = document.getElementById('go-stats');
-      if (stats) {
-        stats.innerHTML =
-          'SCORE: <span>' + Math.round(Game.score) + '</span><br/>' +
-          'KILLS: <span>' + Player.killCount + '</span><br/>' +
-          'STYLE: <span>' + StyleMeter.rank + '</span><br/>' +
-          'TIME:  <span>' + Math.round(Player.timePlayed) + 's</span>';
-      }
-      document.getElementById('screen-gameover').classList.remove('hidden');
-    }, 1200);
+      if (stats) stats.innerHTML =
+        'SCORE: <span>'+Math.round(this.score)+'</span><br/>'+
+        'KILLS: <span>'+Player.killCount+'</span><br/>'+
+        'STYLE: <span>'+StyleMeter.RANKS.find(r=>r.short===StyleMeter.rank)?.name||'D'+'</span><br/>'+
+        'TIME:  <span>'+Math.round(Player.timePlayed)+'s</span>';
+      this._screen('gameover');
+    }, 1400);
   },
 
   onBossKill() {
-    setTimeout(() => {
-      this._showLevelComplete();
-    }, 2000);
+    HUD.updateBoss(0);
+    setTimeout(() => this._levelComplete(), 2200);
   },
 
-  _showLevelComplete() {
-    // Check if all enemies dead
-    if (Enemies.list.filter(e => e.alive).length > 0 && !Levels.current.isBossLevel) return;
-
+  _levelComplete() {
+    if (this.state !== 'playing') return;
     this.state = 'levelcomplete';
-    const rankColors = { D: '#888', C: '#44aa44', B: '#4488cc', A: '#cc9922', S: '#cc2222' };
-    const rankEl = document.getElementById('lc-rank');
+    HUD.hide();
+
+    const rankData = StyleMeter.RANKS.find(r => r.short === StyleMeter.rank) || StyleMeter.RANKS[0];
+    const rankEl   = document.getElementById('lc-rank');
     if (rankEl) {
-      rankEl.textContent = StyleMeter.rank;
-      rankEl.style.color = rankColors[StyleMeter.rank] || '#888';
-      rankEl.style.textShadow = '0 0 30px ' + (rankColors[StyleMeter.rank] || '#888');
+      rankEl.textContent  = rankData.name;
+      rankEl.style.color  = rankData.color;
+      rankEl.style.textShadow = '0 0 40px ' + rankData.color;
     }
     const stats = document.getElementById('lc-stats');
-    if (stats) {
-      stats.innerHTML =
-        'SCORE: <span>' + Math.round(Game.score) + '</span><br/>' +
-        'KILLS: <span>' + Player.killCount + '</span><br/>' +
-        'TIME:  <span>' + Math.round(Player.timePlayed) + 's</span>';
-    }
-    document.getElementById('screen-levelcomplete').classList.remove('hidden');
+    if (stats) stats.innerHTML =
+      'SCORE: <span>'+Math.round(this.score)+'</span><br/>'+
+      'KILLS: <span>'+Player.killCount+'</span><br/>'+
+      'TIME:  <span>'+Math.round(Player.timePlayed)+'s</span>';
+    this._screen('levelcomplete');
   },
 
-  loop(timestamp) {
+  _loop(timestamp) {
     const dt = Math.min((timestamp - this.lastTime) / 1000, 0.05);
     this.lastTime = timestamp;
-
-    if (this.state === 'playing') {
+    if (this.state === 'playing' || this.state === 'dead') {
       this._update(dt);
       this._draw();
     }
-
-    this.animFrame = requestAnimationFrame(ts => this.loop(ts));
+    requestAnimationFrame(ts => this._loop(ts));
   },
 
   _update(dt) {
+    if (this.state !== 'playing') return;
     Input.tick();
+    this.levelTimer += dt;
 
     // Weapon swap
     if (Input.swapPressed || MobileInput.swapPressed) Weapons.swap();
@@ -159,33 +143,20 @@ const Game = {
     // Shoot
     const shootInput = Input.mouse.down || MobileInput.shootHeld;
     if (shootInput) {
-      const camX = Renderer.getCamX();
-      const camY = Renderer.getCamY();
-      const mx   = MobileInput.isMobile
-        ? Player.x + Player.w/2 + Player.facing * 200
+      const camX = Renderer.getCamX(), camY = Renderer.getCamY();
+      const mx = MobileInput.isMobile
+        ? Player.x + Player.w/2 + Player.facing * 250
         : Input.mouse.x + camX;
-      const my   = MobileInput.isMobile
-        ? Player.y + Player.h/2
+      const my = MobileInput.isMobile
+        ? Player.y + Player.h/2 - 10
         : Input.mouse.y + camY;
-      Weapons.fire(
-        Player.x + Player.w/2, Player.y + Player.h/2,
-        mx, my,
-        StyleMeter.dmgMultiplier
-      );
+      Weapons.fire(Player.x + Player.w/2, Player.y + Player.h/2, mx, my, StyleMeter.dmgMultiplier);
     }
 
-    // Mobile parry/dash via button
-    if (MobileInput.parryPressed) {
-      Input.keys['KeyE'] = true;
-      setTimeout(() => { Input.keys['KeyE'] = false; }, 50);
-    }
-    if (MobileInput.dashPressed) {
-      Input.keys['ShiftLeft'] = true;
-      setTimeout(() => { Input.keys['ShiftLeft'] = false; }, 50);
-    }
-    if (MobileInput.slamPressed && !Player.onGround) {
-      Player._doSlam();
-    }
+    // Mobile button wiring
+    if (MobileInput.parryPressed) { Input.keys['KeyE'] = true; setTimeout(()=>{ Input.keys['KeyE']=false; },60); }
+    if (MobileInput.dashPressed)  { Input.keys['ShiftLeft'] = true; setTimeout(()=>{ Input.keys['ShiftLeft']=false; },60); }
+    if (MobileInput.slamPressed && !Player.onGround) Player._doSlam();
 
     Player.update(dt);
     Enemies.update(dt);
@@ -193,43 +164,38 @@ const Game = {
     Particles.update(dt);
     StyleMeter.update(dt);
 
+    // Update HUD
+    HUD.updateHP(Player.hp, Player.maxHp);
+    HUD.updateTime(this.levelTimer);
+    const boss = Enemies.list.find(e => e.isBoss && e.alive);
+    HUD.updateBoss(boss ? boss.hp : null, boss ? 'BOSS HP' : null);
+
     // Check exit
     if (Player.x + Player.w > Levels.current.exitX && Player.alive) {
-      const allDead = Enemies.list.every(e => !e.alive);
-      if (allDead) this._showLevelComplete();
+      if (Enemies.list.every(e => !e.alive)) this._levelComplete();
     }
 
-    // Camera
     Renderer.updateCamera(Player.x + Player.w/2, Player.y + Player.h/2, dt);
-
     MobileInput.tick();
   },
 
   _draw() {
     Renderer.clear();
+    const ctx  = Renderer.ctx;
     const camX = Renderer.getCamX();
     const camY = Renderer.getCamY();
-    const ctx  = Renderer.ctx;
+    const W    = Renderer.W, H = Renderer.H;
 
-    // Level background + platforms
-    Levels.draw(ctx, camX, camY, Renderer.W, Renderer.H);
-
-    // Particles (behind entities)
+    Levels.draw(ctx, camX, camY, W, H);
     Particles.draw(ctx, camX, camY);
-
-    // Enemies
     Enemies.draw(ctx, camX, camY);
-
-    // Player
     Player.draw(ctx, camX, camY);
-
-    // Bullets
     Weapons.draw(ctx, camX, camY);
 
-    // HUD
-    Renderer.drawHUD(Player);
+    // Canvas HUD elements
+    StyleMeter.draw(ctx, W, H);
+    HUD.drawCanvas(ctx, W, H);
   }
 };
 
-// Start when page loads
 window.addEventListener('load', () => Game.init());
