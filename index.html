@@ -5,139 +5,269 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <title>BRUTAL — 2D Action</title>
+  <meta name="theme-color" content="#000000"/>
+  <title>ULTRAPIXEL</title>
   <link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
-  <canvas id="game-canvas"></canvas>
 
-  <!-- Mobile HUD -->
-  <div id="mobile-hud" class="hidden">
-    <div id="style-meter-mobile">
-      <div id="style-rank-mobile">D</div>
-      <div id="style-bar-wrap"><div id="style-bar"></div></div>
-    </div>
-    <div id="hp-hud">
-      <span id="hp-icon">♥</span>
-      <div id="hp-bar-wrap"><div id="hp-bar"></div></div>
-      <span id="hp-val">100</span>
-    </div>
-    <div id="weapon-hud">
-      <span id="weapon-name">REVOLVER</span>
-      <span id="ammo-val">6</span>
-    </div>
-  </div>
+<!-- Screen flash + vignette overlays -->
+<div id="screen-flash"></div>
+<div id="low-health-vignette"></div>
 
-  <!-- Mobile controls -->
-  <div id="mobile-controls" class="hidden">
-    <!-- Left side: joystick -->
-    <div id="joy-zone">
-      <div id="joy-base" class="hidden">
-        <div id="joy-stick"></div>
-      </div>
-      <div id="joy-hint">MOVE</div>
-    </div>
+<!-- ═══ GAME CANVAS ═══ -->
+<canvas id="game-canvas"></canvas>
 
-    <!-- Right side: action buttons -->
-    <div id="action-btns">
-      <button class="action-btn" id="btn-jump">
-        <svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 15V5M5 8l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-        JUMP
-      </button>
-      <button class="action-btn" id="btn-shoot">
-        <svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 9h10M14 7l4 2-4 2V7z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>
-        FIRE
-      </button>
-      <button class="action-btn" id="btn-dash">
-        <svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 9h14M10 5l6 4-6 4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        DASH
-      </button>
-      <button class="action-btn" id="btn-slam">
-        <svg width="18" height="18" viewBox="0 0 18 18"><path d="M9 3v10M5 10l4 5 4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-        SLAM
-      </button>
-      <button class="action-btn" id="btn-parry">
-        <svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M6 9l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-        PARRY
-      </button>
-      <button class="action-btn" id="btn-weapon">
-        <svg width="18" height="18" viewBox="0 0 18 18"><rect x="2" y="7" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M14 9h3M8 7V5M11 7V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        SWAP
-      </button>
+<!-- ═══════════════════════════════════
+     IN-GAME HUD
+     Matches reference: top bar with
+     HEALTH | BOSS BAR | TIME | WEAPON | PAUSE
+════════════════════════════════════ -->
+<div id="hud-top" class="hidden">
+  <!-- Health -->
+  <div id="hud-hp">
+    <span class="hud-label">HEALTH</span>
+    <div id="hud-hp-nums">
+      <span id="hud-hp-current">100</span>
+      <span id="hud-hp-sep">/</span>
+      <span id="hud-hp-max">100</span>
     </div>
   </div>
 
-  <!-- Screens -->
-  <div id="screen-title" class="screen">
-    <div class="title-logo">
-      <div class="title-main">BRUTAL</div>
-      <div class="title-sub">KILL TO SURVIVE</div>
+  <!-- Boss HP or Score -->
+  <div id="hud-boss">
+    <span class="hud-label" id="hud-boss-label">ENEMY BOSSBAR</span>
+    <span id="hud-boss-val">—</span>
+  </div>
+
+  <!-- Time -->
+  <div id="hud-time">
+    <span class="hud-label">TIME</span>
+    <span id="hud-time-val">0</span>
+  </div>
+
+  <!-- Current weapon icon -->
+  <div id="hud-weapon-display">
+    <!-- SVG weapon icon drawn by JS -->
+    <svg id="hud-weapon-icon" width="70" height="44" viewBox="0 0 70 44"></svg>
+  </div>
+
+  <!-- Pause button visual -->
+  <div id="hud-pause-icon">
+    <div class="pause-bar"></div>
+    <div class="pause-bar"></div>
+  </div>
+</div>
+
+<!-- Style meter left side -->
+<div id="style-meter" class="hidden">
+  <span id="style-rank-display">D</span>
+  <div id="style-bonus-list"></div>
+</div>
+
+<!-- Kill feed right side -->
+<div id="kill-feed" class="hidden"></div>
+
+<!-- ═══════════════════════════════════
+     MOBILE CONTROLS
+════════════════════════════════════ -->
+<div id="mobile-controls" class="hidden">
+  <!-- Left: movement joystick -->
+  <div id="joy-zone">
+    <div id="joy-base" class="hidden">
+      <div id="joy-stick">
+        <!-- Cat skull icon like reference -->
+        <svg width="32" height="32" viewBox="0 0 32 32" style="opacity:0.5">
+          <circle cx="16" cy="14" r="11" fill="none" stroke="rgba(200,200,180,0.6)" stroke-width="1.5"/>
+          <circle cx="11" cy="11" r="3" fill="rgba(180,180,160,0.4)"/>
+          <circle cx="21" cy="11" r="3" fill="rgba(180,180,160,0.4)"/>
+          <path d="M11 19 Q16 23 21 19" fill="none" stroke="rgba(200,200,180,0.4)" stroke-width="1.2"/>
+          <!-- Cat ears -->
+          <path d="M7 6 L9 12 L12 8 Z" fill="rgba(160,160,140,0.3)"/>
+          <path d="M25 6 L23 12 L20 8 Z" fill="rgba(160,160,140,0.3)"/>
+        </svg>
+      </div>
     </div>
-    <div class="title-tagline">BLOOD IS HEALTH</div>
-    <button class="menu-btn" id="btn-start">PLAY</button>
-    <button class="menu-btn secondary" id="btn-how">HOW TO PLAY</button>
-    <div class="title-controls">
-      WASD/Arrow: Move &nbsp;|&nbsp; Space: Jump &nbsp;|&nbsp; Shift: Dash &nbsp;|&nbsp; LMB: Shoot &nbsp;|&nbsp; E: Parry &nbsp;|&nbsp; S(air): Slam &nbsp;|&nbsp; Q: Swap Weapon
+    <span id="joy-hint">MOVE</span>
+  </div>
+
+  <!-- Right: action buttons with ULTRAKILL-style SVG icons -->
+  <div id="action-btns">
+
+    <!-- Row 1 -->
+    <button class="action-btn" id="btn-parry" title="Parry">
+      <!-- Hook/whiplash icon -->
+      <svg width="22" height="22" viewBox="0 0 22 22">
+        <path d="M4 18 Q8 6 16 4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        <path d="M14 2 L18 6 L14 8" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+        <circle cx="4" cy="18" r="2" fill="currentColor" opacity="0.6"/>
+      </svg>
+      PARRY
+    </button>
+
+    <button class="action-btn" id="btn-slam" title="Slam">
+      <!-- Down arrow slam -->
+      <svg width="22" height="22" viewBox="0 0 22 22">
+        <path d="M11 3 L11 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 11 L11 17 L16 11" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+        <rect x="3" y="18" width="16" height="2" rx="1" fill="currentColor" opacity="0.6"/>
+      </svg>
+      SLAM
+    </button>
+
+    <button class="action-btn" id="btn-weapon" title="Swap Weapon">
+      <!-- Weapon swap — two arrows with gun silhouette -->
+      <svg width="22" height="22" viewBox="0 0 22 22">
+        <rect x="2" y="8" width="12" height="4" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <rect x="10" y="6" width="5" height="3" rx="0.5" stroke="currentColor" stroke-width="1" fill="none"/>
+        <path d="M14 10 L20 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M5 5 L3 7 L5 9" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+        <path d="M17 13 L19 15 L17 17" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+      </svg>
+      SWAP
+    </button>
+
+    <!-- Row 2 -->
+    <button class="action-btn" id="btn-jump" title="Jump">
+      <!-- Up arrow jump -->
+      <svg width="22" height="22" viewBox="0 0 22 22">
+        <path d="M11 17 L11 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 10 L11 4 L16 10" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M4 18 L18 18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+      </svg>
+      JUMP
+    </button>
+
+    <button class="action-btn" id="btn-shoot" title="Shoot">
+      <!-- Revolver/gun silhouette -->
+      <svg width="24" height="22" viewBox="0 0 24 22">
+        <rect x="2" y="9" width="13" height="5" rx="1" fill="currentColor" opacity="0.9"/>
+        <rect x="12" y="7" width="6" height="4" rx="0.5" fill="currentColor" opacity="0.7"/>
+        <rect x="5" y="14" width="5" height="4" rx="0.5" fill="currentColor" opacity="0.5"/>
+        <path d="M15 11 L22 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="6" cy="11" r="2.5" fill="rgba(0,0,0,0.4)" stroke="currentColor" stroke-width="1"/>
+      </svg>
+      FIRE
+    </button>
+
+    <button class="action-btn" id="btn-dash" title="Dash">
+      <!-- Double chevron dash -->
+      <svg width="22" height="22" viewBox="0 0 22 22">
+        <path d="M4 7 L10 11 L4 15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M11 7 L17 11 L11 15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      DASH
+    </button>
+
+  </div>
+
+  <!-- Next weapon mini preview like reference image -->
+  <div id="next-weapon-preview">
+    <span style="font-size:7px;opacity:0.5;">NEXT GUN</span>
+    <svg id="next-weapon-icon" width="40" height="24" viewBox="0 0 40 24"></svg>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════
+     SCREENS
+════════════════════════════════════ -->
+
+<!-- TITLE SCREEN -->
+<div id="screen-title" class="screen">
+  <!-- Industrial corridor background -->
+  <div id="title-bg">
+    <div id="title-glow"></div>
+    <div id="title-pillars">
+      <div class="pillar left-1"></div>
+      <div class="pillar left-2"></div>
+      <div class="pillar left-3"></div>
+      <div class="pillar right-1"></div>
+      <div class="pillar right-2"></div>
+      <div class="pillar right-3"></div>
+    </div>
+    <div id="title-ground"></div>
+    <div id="title-scanlines"></div>
+  </div>
+
+  <div class="title-content">
+    <div class="title-eyebrow">MANKIND IS DEAD. BLOOD IS FUEL.</div>
+    <div class="title-main">ULTRA<br/>PIXEL</div>
+    <div class="title-sub">HELL IS FULL. TIME TO PAINT THE WALLS.</div>
+    <div class="title-tagline">BLOOD IS HEALTH — KILL TO SURVIVE</div>
+  </div>
+
+  <button class="menu-btn" id="btn-start">START GAME</button>
+  <button class="menu-btn secondary" id="btn-how">HOW TO PLAY</button>
+
+  <div class="title-controls">
+    WASD / ARROWS: Move &nbsp;·&nbsp; SPACE: Jump (×2) &nbsp;·&nbsp; SHIFT: Dash &nbsp;·&nbsp; LMB: Shoot<br/>
+    E: Parry &nbsp;·&nbsp; S (air): Slam &nbsp;·&nbsp; Q: Swap Weapon &nbsp;·&nbsp; KILL ENEMIES TO RESTORE HEALTH
+  </div>
+
+  <div class="title-bottom-bar"></div>
+</div>
+
+<!-- HOW TO PLAY -->
+<div id="screen-howto" class="screen hidden">
+  <h2 class="howto-title">// HOW TO PLAY</h2>
+  <div class="howto-grid">
+    <div class="howto-item">
+      <div class="howto-icon" style="color:#ff4444;">♥</div>
+      <div class="howto-text"><b>BLOOD IS HEALTH</b><br/>You heal by killing enemies. Letting them live means you die. Get in close. Get bloody.</div>
+    </div>
+    <div class="howto-item">
+      <div class="howto-icon" style="color:#ff2222;">S</div>
+      <div class="howto-text"><b>STYLE METER</b><br/>Destructive → Chaotic → Brutal → Anarchic → ULTRAKILL. Higher rank = faster health regen.</div>
+    </div>
+    <div class="howto-item">
+      <div class="howto-icon" style="color:#4488ff;">↩</div>
+      <div class="howto-text"><b>PARRY (E)</b><br/>Blue glowing projectiles can be punched back. Parry timing window: 0.18s. Instant style boost.</div>
+    </div>
+    <div class="howto-item">
+      <div class="howto-icon" style="color:#00ccff;">⚡</div>
+      <div class="howto-text"><b>DASH (SHIFT)</b><br/>Invincible during dash. Air dash once. Dash through enemies. Refills on ground.</div>
+    </div>
+    <div class="howto-item">
+      <div class="howto-icon" style="color:#ff6600;">↓</div>
+      <div class="howto-text"><b>GROUND SLAM (S in air)</b><br/>Slam cancels all velocity. Huge AOE damage + style on impact. Launches nearby enemies.</div>
+    </div>
+    <div class="howto-item">
+      <div class="howto-icon" style="color:#ffdd00;">🔫</div>
+      <div class="howto-text"><b>WEAPONS (Q to swap)</b><br/>Revolver: precise, charged shot. Shotgun: spread + parry boost. Nailgun: rapid fire. Railcannon: one-shot beam.</div>
     </div>
   </div>
+  <button class="menu-btn secondary" id="btn-howto-back">◀ BACK</button>
+</div>
 
-  <div id="screen-howto" class="screen hidden">
-    <h2 class="howto-title">HOW TO PLAY</h2>
-    <div class="howto-grid">
-      <div class="howto-item">
-        <div class="howto-icon">♥</div>
-        <div class="howto-text"><b>BLOOD IS HEALTH</b><br/>Kill enemies to restore HP. Don't let your health drain to zero.</div>
-      </div>
-      <div class="howto-item">
-        <div class="howto-icon">S</div>
-        <div class="howto-text"><b>STYLE METER</b><br/>Kill fast and varied to build style. Higher rank = more damage.</div>
-      </div>
-      <div class="howto-item">
-        <div class="howto-icon">↩</div>
-        <div class="howto-text"><b>PARRY</b><br/>Press E near a glowing blue bullet to parry it back. Parrying restores style.</div>
-      </div>
-      <div class="howto-item">
-        <div class="howto-icon">⚡</div>
-        <div class="howto-text"><b>DASH</b><br/>Shift to dash. Invincible during dash. Double dash = air dash.</div>
-      </div>
-      <div class="howto-item">
-        <div class="howto-icon">↓</div>
-        <div class="howto-text"><b>GROUND SLAM</b><br/>In the air, press S to slam down. Damages all nearby enemies on impact.</div>
-      </div>
-      <div class="howto-item">
-        <div class="howto-icon">🔫</div>
-        <div class="howto-text"><b>WEAPONS</b><br/>Revolver: powerful single shot.<br/>Shotgun: spread damage.<br/>Railgun: piercing beam.</div>
-      </div>
-    </div>
-    <button class="menu-btn" id="btn-howto-back">BACK</button>
-  </div>
+<!-- GAME OVER -->
+<div id="screen-gameover" class="screen hidden">
+  <div class="go-title">YOU DIED</div>
+  <div id="go-stats"></div>
+  <button class="menu-btn" id="btn-retry">TRY AGAIN</button>
+  <button class="menu-btn secondary" id="btn-go-menu">MAIN MENU</button>
+</div>
 
-  <div id="screen-gameover" class="screen hidden">
-    <div class="go-title">YOU DIED</div>
-    <div id="go-stats"></div>
-    <button class="menu-btn" id="btn-retry">RETRY</button>
-    <button class="menu-btn secondary" id="btn-go-menu">MENU</button>
-  </div>
+<!-- LEVEL COMPLETE -->
+<div id="screen-levelcomplete" class="screen hidden">
+  <div class="lc-title">// LEVEL CLEAR //</div>
+  <div id="lc-rank"></div>
+  <div id="lc-stats"></div>
+  <button class="menu-btn" id="btn-next">NEXT LEVEL ▶</button>
+</div>
 
-  <div id="screen-levelcomplete" class="screen hidden">
-    <div class="lc-title">LEVEL COMPLETE</div>
-    <div id="lc-rank"></div>
-    <div id="lc-stats"></div>
-    <button class="menu-btn" id="btn-next">NEXT LEVEL</button>
-  </div>
-
-  <!-- Scripts -->
-  <script src="js/utils.js"></script>
-  <script src="js/input.js"></script>
-  <script src="js/audio.js"></script>
-  <script src="js/particles.js"></script>
-  <script src="js/entities.js"></script>
-  <script src="js/weapons.js"></script>
-  <script src="js/enemies.js"></script>
-  <script src="js/levels.js"></script>
-  <script src="js/style-meter.js"></script>
-  <script src="js/renderer.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/mobile.js"></script>
+<!-- ═══ SCRIPTS ═══ -->
+<script src="js/utils.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/particles.js"></script>
+<script src="js/weapons.js"></script>
+<script src="js/style-meter.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/enemies.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/mobile.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/game.js"></script>
 </body>
 </html>
